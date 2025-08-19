@@ -8,9 +8,13 @@ on:
         required: true
         default: "India"
 
+permissions:
+  contents: write  # allow pushing back to the repo
+
 jobs:
-  fetch-and-save:
+  fetch-and-commit:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -18,22 +22,44 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: pip install requests
+      - name: Install deps
+        run: pip install requests
 
-      - name: Fetch states and save CSV
-        run: python fetch_states.py "${{ github.event.inputs.country }}"
+      - name: Fetch states and save to CSV
+        run: |
+          python - <<'EOF'
+          import sys, csv, requests
+          country = "${{ github.event.inputs.country }}"
+          url = "https://countriesnow.space/api/v0.1/countries/states"
+          r = requests.post(url, json={"country": country}, timeout=30)
+          r.raise_for_status()
+          data = r.json().get("data", {})
+          states = data.get("states", [])
+          with open("states.csv", "w", newline="", encoding="utf-8") as f:
+              w = csv.writer(f)
+              w.writerow(["State"])
+              for s in states:
+                  name = s.get("name") if isinstance(s, dict) else s
+                  if name:
+                      w.writerow([name])
+          print(f"✅ {len(states)} states saved for {country}")
+          EOF
 
-      - name: Move CSV into country directory
+      - name: Move CSV into country folder
         run: |
           COUNTRY="${{ github.event.inputs.country }}"
           mkdir -p "$COUNTRY"
-          mv states.csv "$COUNTRY/states.csv"
+          mv -f states.csv "$COUNTRY/states.csv"
           ls -R .
 
-      - name: Commit and Push
+      - name: Commit & push (if changed)
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add .
-          git commit -m "Added states list for ${{ github.event.inputs.country }}"
-          git push
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Add states for ${{ github.event.inputs.country }}"
+            git push
+          fi
