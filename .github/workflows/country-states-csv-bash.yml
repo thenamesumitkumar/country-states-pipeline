@@ -1,0 +1,43 @@
+name: Country States CSV Converter (Bash - Simple)
+
+on:
+  workflow_dispatch:
+    inputs:
+      country:
+        description: "Enter country name"
+        required: true
+        default: "India"
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch states and save CSV
+        run: |
+          COUNTRY="${{ github.event.inputs.country }}"
+          echo "Fetching states for $COUNTRY..."
+          curl -s -X POST "https://countriesnow.space/api/v0.1/countries/states" \
+            -H "Content-Type: application/json" \
+            -d "{\"country\":\"$COUNTRY\"}" \
+          | jq -r '.data.states[].name' > states.csv
+          echo "State" | cat - states.csv > tmp && mv tmp states.csv
+
+      - name: Save into country folder
+        run: |
+          COUNTRY="${{ github.event.inputs.country }}"
+          mkdir -p "$COUNTRY"
+          mv states.csv "$COUNTRY/states.csv"
+          ls -R .
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Added states for ${{ github.event.inputs.country }}"
+          git push
