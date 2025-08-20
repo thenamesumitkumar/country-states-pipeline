@@ -1,0 +1,45 @@
+name: Country States CSV Converter (PowerShell)
+
+on:
+  workflow_dispatch:
+    inputs:
+      country:
+        description: "Enter country name"
+        required: true
+        default: "India"
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch states and save CSV
+        run: |
+          $country = "${{ github.event.inputs.country }}"
+          Write-Host "Fetching states for $country..."
+          $response = Invoke-RestMethod -Uri "https://countriesnow.space/api/v0.1/countries/states" `
+                      -Method Post -ContentType "application/json" `
+                      -Body (@{ country = $country } | ConvertTo-Json)
+          $response.data.states | Select-Object -ExpandProperty name |
+            Export-Csv -Path "states.csv" -NoTypeInformation
+
+      - name: Save into country folder
+        run: |
+          $country = "${{ github.event.inputs.country }}"
+          New-Item -ItemType Directory -Force -Path $country | Out-Null
+          Move-Item -Force states.csv "$country/states.csv"
+          Get-ChildItem -Recurse
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "Added states for ${{ github.event.inputs.country }}"
+            git push
+          }
