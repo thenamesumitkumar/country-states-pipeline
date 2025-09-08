@@ -25,6 +25,6 @@ jobs:
           ./trigger.sh \
             thenamesumitkumar \
             country-states-pipeline \
-            country-states-csv-bash.yml \
+            country-states-csv-converter.yml \
             main \
             "{\"country\":\"${{ github.event.inputs.country }}\"}"
